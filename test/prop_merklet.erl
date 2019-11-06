@@ -67,7 +67,7 @@ prop_delete() ->
                 andalso
                 merklet:keys(DeletedTree) =:= merklet:keys(PartialTree)
                 andalso
-                DeletedTree =:= PartialTree
+                merklet:expand_db_tree(DeletedTree) =:= merklet:expand_db_tree(PartialTree)
             end).
 
 prop_modify() ->
@@ -88,7 +88,7 @@ prop_modify() ->
 %%%%%%%%%%%%%%%%
 %%% Builders %%%
 %%%%%%%%%%%%%%%%
-insert_all(KeyVals) -> insert_all(KeyVals, undefined).
+insert_all(KeyVals) -> insert_all(KeyVals, merklet:empty_db_tree()).
 insert_all(KeyVals, Tree) -> lists:foldl(fun merklet:insert/2, Tree, KeyVals).
 
 delete_keys(Keys, Tree) -> lists:foldl(fun merklet:delete/2, Tree, Keys).
@@ -108,7 +108,7 @@ diff_keyvals() ->
 delete_keyvals(Rate) ->
     ?LET(KeyVals, keyvals(),
          begin
-          Rand = random:uniform(),
+          Rand = rand:uniform(),
           ToDelete = [Key || {Key,_} <- KeyVals, Rate > Rand],
           WithoutDeleted = [{K,V} || {K,V} <- KeyVals, Rate < Rand],
           {KeyVals, WithoutDeleted, ToDelete}
@@ -116,10 +116,10 @@ delete_keyvals(Rate) ->
 
 modify_keyvals(Rate) ->
     % similar as delete_keyvals but doesn't allow duplicate updates
-    ?SUCHTHAT({_,ToChange}, 
+    ?SUCHTHAT({_,ToChange},
               ?LET(KeyVals, keyvals(),
                 begin
-                  Rand = random:uniform(),
+                  Rand = rand:uniform(),
                   ToDelete = [Key || {Key,_} <- KeyVals, Rate > Rand],
                   {KeyVals, lists:usort(ToDelete)}
                 end),
