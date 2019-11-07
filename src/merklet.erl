@@ -32,6 +32,45 @@
 %%%
 %%% It also allows to do a level-order traversal node-per-node over the network
 %%% allowing somewhat efficient diffing.
+%%%
+%%% This implementaion has two variants:
+%%%   - A purely functional ADT (i.e.,  non_db_tree())
+%%%   - An ADT with a (possibly stateful) storage backend. (i.e., dbtree())
+%%%
+%%% The variants are semantically equivalent under the API, but since
+%%% the representation is different, trees cannot be compared by using
+%%% term comparison (=:=, pattern matching, etc).
+%%%
+%%% In the functional ADT all inner nodes (inner()) contains the
+%%% complete terms of its children, but in the DB backed ADT, the
+%%% inner nodes contains only the hashes of its children.
+%%%
+%%% The children are stored in (and retrieved from) the backend using
+%%% user defined callback functions.
+%%%
+%%%    db_handle()  A term that defines to the access funs which storage to use.
+%%%
+%%%    get_fun()    A fun that given a hash and a db_handle() delivers the node
+%%%                 associated with the hash.
+%%%
+%%%    put_fun()    A fun that given a hash, a node and a db_handle() stores
+%%%                 the node previously stored with the hash as key, returning
+%%%                 a new db_handle().
+%%%
+%%% Note that the db_handle() is treated in a functional manner, so a
+%%% functional key-value store (e.g., dict(), gb_tree()) can be used
+%%% to keep the full trees functional even if this version is
+%%% used. The typical usage would rather have some other stateful
+%%% storage model as the backend (e.g., mnesia table, ets, dets).
+%%%
+%%% Also note that nodes are not removed from the db backend. This
+%%% gives the benefit that historical merkle trees can be retrieved
+%%% from the database (using the root hash), but at the same time it
+%%% leads to a waste of space if only the newest tree is ever used.
+%%%
+%%% TODO: Implement a moving garbage collector for old trees.
+%%% TODO: Implement an API function to retrieve historical trees.
+%%%
 %%% @end
 -module(merklet).
 
