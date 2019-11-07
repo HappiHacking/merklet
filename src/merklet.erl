@@ -78,7 +78,7 @@
 -export_type([get_fun/0, put_fun/0, db_handle/0]).
 -export([insert/2, insert_many/2, delete/2, keys/1, diff/2]).
 -export([dist_diff/2, access_serialize/1, access_unserialize/1]).
--export([empty_db_tree/0, expand_db_tree/1]).
+-export([empty_db_tree/0, empty_db_tree/1, expand_db_tree/1]).
 
 -ifdef(TEST).
 %% Test interface

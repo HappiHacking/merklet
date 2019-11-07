@@ -19,6 +19,13 @@ eunit_dict_db_test_() ->
      ?run(prop_modify_dict_db())
     ].
 
+eunit_ets_db_test_() ->
+    [?run(prop_diff_ets_db()),
+     ?run(prop_dist_diff_ets_db()),
+     ?run(prop_delete_ets_db()),
+     ?run(prop_modify_ets_db())
+    ].
+
 %%%%%%%%%%%%%%%%%%
 %%% Properties %%%
 %%%%%%%%%%%%%%%%%%
@@ -27,6 +34,9 @@ prop_diff_no_db() ->
 
 prop_diff_dict_db() ->
     prop_diff(dict_db).
+
+prop_diff_ets_db() ->
+    prop_diff(ets_db).
 
 prop_diff(Backend) ->
     %% All differences between trees can be found no matter the order,
@@ -48,6 +58,9 @@ prop_dist_diff_no_db() ->
 
 prop_dist_diff_dict_db() ->
     prop_dist_diff(dict_db).
+
+prop_dist_diff_ets_db() ->
+    prop_dist_diff(ets_db).
 
 prop_dist_diff(Backend) ->
     %% All differences between trees can be found no matter the order,
@@ -80,6 +93,9 @@ prop_delete_no_db() ->
 prop_delete_dict_db() ->
     prop_delete(dict_db).
 
+prop_delete_ets_db() ->
+    prop_delete(ets_db).
+
 prop_delete(Backend) ->
     %% Having a tree and deleting a percentage of it yields the same tree
     %% without said keys.
@@ -101,6 +117,9 @@ prop_modify_no_db() ->
 prop_modify_dict_db() ->
     prop_modify(dict_db).
 
+prop_modify_ets_db() ->
+    prop_modify(ets_db).
+
 prop_modify(Backend) ->
     %% Updating records' values should show detections as part of merklet's
     %% diff operations, even if none of the keys change.
@@ -120,7 +139,8 @@ prop_modify(Backend) ->
 %%% Builders %%%
 %%%%%%%%%%%%%%%%
 insert_all(KeyVals, no_db) -> extend(KeyVals, undefined);
-insert_all(KeyVals, dict_db) -> extend(KeyVals, merklet:empty_db_tree()).
+insert_all(KeyVals, dict_db) -> extend(KeyVals, merklet:empty_db_tree());
+insert_all(KeyVals, ets_db) -> extend(KeyVals, merklet:empty_db_tree(merklet_ets_db_backend:spec())).
 
 extend(KeyVals, Tree) -> lists:foldl(fun merklet:insert/2, Tree, KeyVals).
 

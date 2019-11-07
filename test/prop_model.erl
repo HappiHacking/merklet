@@ -38,10 +38,27 @@ eunit_dict_db_test_() ->
      ?run(prop_mixed_dist_diff_dict_db())
     ].
 
+eunit_ets_db_test_() ->
+    [?run(prop_insert_many_ets_db()),
+     ?run(prop_delete_random_ets_db()),
+     ?run(prop_delete_members_ets_db()),
+     ?run(prop_overwrite_ets_db()),
+     ?run(prop_insert_same_diff_ets_db()),
+     ?run(prop_insert_mixed_diff_ets_db()),
+     ?run(prop_insert_disjoint_diff_ets_db()),
+     ?run(prop_delete_random_diff_ets_db()),
+     ?run(prop_delete_members_diff_ets_db()),
+     ?run(prop_overwrite_diff_ets_db()),
+     ?run(prop_mixed_diff_ets_db()),
+     ?run(prop_mixed_dist_diff_ets_db())
+    ].
+
 empty_tree(no_db) ->
     undefined;
 empty_tree(dict_db) ->
-    merklet:empty_db_tree().
+    merklet:empty_db_tree();
+empty_tree(ets_db) ->
+    merklet:empty_db_tree(merklet_ets_db_backend:spec()).
 
 %% Test insertion and reading the keys back
 prop_insert_many_no_db() ->
@@ -49,6 +66,9 @@ prop_insert_many_no_db() ->
 
 prop_insert_many_dict_db() ->
     prop_insert_many(dict_db).
+
+prop_insert_many_ets_db() ->
+    prop_insert_many(ets_db).
 
 prop_insert_many(Backend) ->
     ?FORALL(Entries, keyvals(),
@@ -63,6 +83,9 @@ prop_delete_random_no_db() ->
 
 prop_delete_random_dict_db() ->
     prop_delete_random(dict_db).
+
+prop_delete_random_ets_db() ->
+    prop_delete_random(ets_db).
 
 prop_delete_random(Backend) ->
     ?FORALL({Entries, ToDelete}, {keyvals(), list(binary())},
@@ -84,6 +107,9 @@ prop_delete_members_no_db() ->
 prop_delete_members_dict_db() ->
     prop_delete_members(dict_db).
 
+prop_delete_members_ets_db() ->
+    prop_delete_members(ets_db).
+
 prop_delete_members(Backend) ->
     ?FORALL({Entries, ToDelete}, delete_keyvals(0.5),
             merklet_model:keys(
@@ -104,6 +130,9 @@ prop_overwrite_no_db() ->
 prop_overwrite_dict_db() ->
     prop_overwrite(dict_db).
 
+prop_overwrite_ets_db() ->
+    prop_overwrite(ets_db).
+
 prop_overwrite(Backend) ->
     ?FORALL({Entries, ToUpdate}, overwrite_keyvals(0.5),
             merklet_model:keys(
@@ -122,6 +151,9 @@ prop_insert_same_diff_no_db() ->
 prop_insert_same_diff_dict_db() ->
     prop_insert_same_diff(dict_db).
 
+prop_insert_same_diff_ets_db() ->
+    prop_insert_same_diff(ets_db).
+
 prop_insert_same_diff(Backend) ->
     ?FORALL(Entries, keyvals(),
             merklet_model:diff(merklet_model:insert_many(Entries,undefined),
@@ -137,6 +169,9 @@ prop_insert_mixed_diff_no_db() ->
 
 prop_insert_mixed_diff_dict_db() ->
     prop_insert_mixed_diff(dict_db).
+
+prop_insert_mixed_diff_ets_db() ->
+    prop_insert_mixed_diff(ets_db).
 
 prop_insert_mixed_diff(Backend) ->
     ?FORALL({Entries1, Entries2}, {keyvals(), keyvals()},
@@ -154,6 +189,9 @@ prop_insert_disjoint_diff_no_db() ->
 
 prop_insert_disjoint_diff_dict_db() ->
     prop_insert_disjoint_diff(dict_db).
+
+prop_insert_disjoint_diff_ets_db() ->
+    prop_insert_disjoint_diff(ets_db).
 
 prop_insert_disjoint_diff(Backend) ->
     ?FORALL(Lists, disjoint_keyvals(),
@@ -173,6 +211,9 @@ prop_delete_random_diff_no_db() ->
 
 prop_delete_random_diff_dict_db() ->
     prop_delete_random_diff(dict_db).
+
+prop_delete_random_diff_ets_db() ->
+    prop_delete_random_diff(ets_db).
 
 prop_delete_random_diff(Backend) ->
     ?FORALL({Entries, ToDelete}, {keyvals(), list(binary())},
@@ -195,6 +236,9 @@ prop_delete_members_diff_no_db() ->
 prop_delete_members_diff_dict_db() ->
     prop_delete_members_diff(dict_db).
 
+prop_delete_members_diff_ets_db() ->
+    prop_delete_members_diff(ets_db).
+
 prop_delete_members_diff(Backend) ->
     ?FORALL({Entries, ToDelete}, delete_keyvals(0.5),
         begin
@@ -215,6 +259,9 @@ prop_overwrite_diff_no_db() ->
 
 prop_overwrite_diff_dict_db() ->
     prop_overwrite_diff(dict_db).
+
+prop_overwrite_diff_ets_db() ->
+    prop_overwrite_diff(ets_db).
 
 prop_overwrite_diff(Backend) ->
     ?FORALL({Entries, ToUpdate}, overwrite_keyvals(0.5),
@@ -237,6 +284,9 @@ prop_mixed_diff_no_db() ->
 
 prop_mixed_diff_dict_db() ->
     prop_mixed_diff(dict_db).
+
+prop_mixed_diff_ets_db() ->
+    prop_mixed_diff(ets_db).
 
 prop_mixed_diff(Backend) ->
     ?FORALL({{Entries, ToUpdate}, ToDelete}, {overwrite_keyvals(0.5), list(binary())},
@@ -277,6 +327,9 @@ prop_mixed_dist_diff_no_db() ->
 
 prop_mixed_dist_diff_dict_db() ->
     prop_mixed_dist_diff(dict_db).
+
+prop_mixed_dist_diff_ets_db() ->
+    prop_mixed_dist_diff(ets_db).
 
 prop_mixed_dist_diff(Backend) ->
     ?FORALL({{Entries, ToUpdate}, ToDelete}, {overwrite_keyvals(0.5), list(binary())},
