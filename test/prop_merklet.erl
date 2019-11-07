@@ -6,23 +6,36 @@
 -define(run(Case), {timeout, timer:seconds(60),
                     ?_assert(proper:quickcheck(Case, ?OPTS))}).
 
-eunit_test_() ->
-    [?run(prop_diff()),
-     ?run(prop_dist_diff()),
-     ?run(prop_delete()),
-     ?run(prop_modify())].
+eunit_no_db_test_() ->
+    [?run(prop_diff_no_db()),
+     ?run(prop_dist_diff_no_db()),
+     ?run(prop_delete_no_db()),
+     ?run(prop_modify_no_db())].
+
+eunit_dict_db_test_() ->
+    [?run(prop_diff_dict_db()),
+     ?run(prop_dist_diff_dict_db()),
+     ?run(prop_delete_dict_db()),
+     ?run(prop_modify_dict_db())
+    ].
 
 %%%%%%%%%%%%%%%%%%
 %%% Properties %%%
 %%%%%%%%%%%%%%%%%%
-prop_diff() ->
+prop_diff_no_db() ->
+    prop_diff(no_db).
+
+prop_diff_dict_db() ->
+    prop_diff(dict_db).
+
+prop_diff(Backend) ->
     %% All differences between trees can be found no matter the order,
     %% and returns the list of different keys.
     ?FORALL({KV1,KV2}, diff_keyvals(),
             begin
                 Keys = [K || {K,_} <- KV2],
-                T1 = insert_all(KV1),
-                T2 = insert_all(KV2, T1),
+                T1 = insert_all(KV1, Backend),
+                T2 = extend(KV2, T1),
                 Diff1 = merklet:diff(T1,T2),
                 Diff2 = merklet:diff(T2,T1),
                 Diff1 =:= Diff2
@@ -30,7 +43,13 @@ prop_diff() ->
                 Diff1 =:= lists:sort(Keys)
             end).
 
-prop_dist_diff() ->
+prop_dist_diff_no_db() ->
+    prop_dist_diff(no_db).
+
+prop_dist_diff_dict_db() ->
+    prop_dist_diff(dict_db).
+
+prop_dist_diff(Backend) ->
     %% All differences between trees can be found no matter the order,
     %% and returns the list of different keys. Same as previous case, but
     %% uses the internal serialization format and distribution API
@@ -38,8 +57,8 @@ prop_dist_diff() ->
     ?FORALL({KV1,KV2}, diff_keyvals(),
             begin
                 Keys = [K || {K,_} <- KV2],
-                T1 = insert_all(KV1),
-                T2 = insert_all(KV2, T1),
+                T1 = insert_all(KV1, Backend),
+                T2 = extend(KV2, T1),
                 %% remmote version of the trees, should be handled
                 %% by merklet:unserialize/1. In practice, this kind
                 %% of thing would take place over the network, and
@@ -55,13 +74,19 @@ prop_dist_diff() ->
                 Diff1 =:= lists:sort(Keys)
             end).
 
-prop_delete() ->
+prop_delete_no_db() ->
+    prop_delete(no_db).
+
+prop_delete_dict_db() ->
+    prop_delete(dict_db).
+
+prop_delete(Backend) ->
     %% Having a tree and deleting a percentage of it yields the same tree
     %% without said keys.
     ?FORALL({All, Partial, ToDelete}, delete_keyvals(0.50),
             begin
-                Tree = insert_all(All),
-                PartialTree = insert_all(Partial),
+                Tree = insert_all(All, Backend),
+                PartialTree = insert_all(Partial, Backend),
                 DeletedTree = delete_keys(ToDelete, Tree),
                 [] =:= merklet:diff(PartialTree, DeletedTree)
                 andalso
@@ -70,14 +95,20 @@ prop_delete() ->
                 merklet:expand_db_tree(DeletedTree) =:= merklet:expand_db_tree(PartialTree)
             end).
 
-prop_modify() ->
+prop_modify_no_db() ->
+    prop_modify(no_db).
+
+prop_modify_dict_db() ->
+    prop_modify(dict_db).
+
+prop_modify(Backend) ->
     %% Updating records' values should show detections as part of merklet's
     %% diff operations, even if none of the keys change.
     ?FORALL({All, ToChange}, modify_keyvals(0.50),
             begin
-                Tree = insert_all(All),
+                Tree = insert_all(All, Backend),
                 KVSet = [{K, term_to_binary(make_ref())} || K <- ToChange],
-                Modified = insert_all(KVSet, Tree),
+                Modified = extend(KVSet, Tree),
                 merklet:keys(Tree) =:= merklet:keys(Modified)
                 andalso
                 lists:sort(ToChange) =:= merklet:diff(Tree, Modified)
@@ -88,8 +119,10 @@ prop_modify() ->
 %%%%%%%%%%%%%%%%
 %%% Builders %%%
 %%%%%%%%%%%%%%%%
-insert_all(KeyVals) -> insert_all(KeyVals, merklet:empty_db_tree()).
-insert_all(KeyVals, Tree) -> lists:foldl(fun merklet:insert/2, Tree, KeyVals).
+insert_all(KeyVals, no_db) -> extend(KeyVals, undefined);
+insert_all(KeyVals, dict_db) -> extend(KeyVals, merklet:empty_db_tree()).
+
+extend(KeyVals, Tree) -> lists:foldl(fun merklet:insert/2, Tree, KeyVals).
 
 delete_keys(Keys, Tree) -> lists:foldl(fun merklet:delete/2, Tree, Keys).
 
