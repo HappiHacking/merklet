@@ -10,7 +10,7 @@
 %%% The Hkey is used as the main index and to build a tree. If we have three
 %%% hashes with the values `<<213,21,54,...>>', `<<213,33,98,...>>', and
 %%% `<<11,45,101,...>>', the resulting tree/trie is:
-%%%
+%%% ```
 %%%                (Root)
 %%%                 Inner
 %%%                /    \
@@ -21,6 +21,7 @@
 %%%                    /       \
 %%%                 (21)       (33)
 %%%      <<213,21,54,...>>     <<213,33,98,...>>
+%%% '''
 %%%
 %%% Each of the leaf nodes will contain both hashes, along with a non-hashed
 %%% version of the key. Each Inner node contains a hash of all its children's
@@ -48,14 +49,15 @@
 %%% The children are stored in (and retrieved from) the backend using
 %%% user defined callback functions.
 %%%
-%%%    db_handle()  A term that defines to the access funs which storage to use.
+%%% <li> {@type db_handle()} A term that defines to the access funs
+%%%      which storage to use.</li>
 %%%
-%%%    get_fun()    A fun that given a hash and a db_handle() delivers the node
-%%%                 associated with the hash.
+%%% <li> {@type get_fun()} A fun that given a hash and a {@type db_handle()}
+%%%       delivers the node associated with the hash.</li>
 %%%
-%%%    put_fun()    A fun that given a hash, a node and a db_handle() stores
-%%%                 the node previously stored with the hash as key, returning
-%%%                 a new db_handle().
+%%% <li> {@type put_fun()} A fun that given a hash, a node and a
+%%%      {@type db_handle()} stores the node previously stored with
+%%%      the hash as key, returning a new db_handle().</li>
 %%%
 %%% Note that the db_handle() is treated in a functional manner, so a
 %%% functional key-value store (e.g., dict(), gb_tree()) can be used
@@ -272,8 +274,8 @@ diff(Tree10, Tree20) ->
 %% The nodes are visited in pre-order, parents are visited before
 %% children.
 %%
-%% The visit fun should either return the atom 'stop' or a new
-%% accumulator. The 'stop` is interpreted as to not traverse the
+%% The visit fun should either return the atom `stop' or a new
+%% accumulator. The `stop' is interpreted as to not traverse the
 %% subtree rooted at the node. Siblings are still traversed.
 
 -type node_type() :: 'leaf' | 'inner'.
@@ -296,33 +298,38 @@ visit_nodes(VisitFun, InitAcc, Tree0) when is_function(VisitFun, 4) ->
 %% The Path is a sequence of bytes (in a `binary()') telling how to get to
 %% a specific node:
 %%
-%% - `<<>>' means returning the current node, at whatever point we are in the
-%%   tree's traversal.
-%% - `<<Offset,...>>' means to return the node at the given offset for the
+%% <li> `<<>>' means returning the current node, at whatever point we are in the
+%%   tree's traversal.</li>
+%%
+%% <li> `<<Offset,...>>' means to return the node at the given offset for the
 %%   current tree level. For example, a value of `<<0>>' means to return the
 %%   leftmost child of the current node, whereas `<<3>>' should return the
 %%   4th leftmost child. Any time the path is larger than the number of
 %%   children, we return `undefined'.
-%%   This is the case where we can recurse.
-%% - Any invalid path returns `undefined'.
+%%   This is the case where we can recurse.</li>
+%%
+%% <li> Any invalid path returns `undefined'.</li>
 %%
 %% The three terms required are:
-%% - `at': Uses the path as above to traverse the tree and return a node.
-%% - `keys': Returns all the keys held (recursively) by the node at a given
+%%
+%% <li> `at': Uses the path as above to traverse the tree and return a node. </li>
+%%
+%% <li> `keys': Returns all the keys held (recursively) by the node at a given
 %%   path. A special variant exists of the form `{keys, Key, Hash}', where the
 %%   function must return the key set minus the one that would contain either
 %%   `Key' or `Hash', but by specifying if the key and hash were encountered,
-%%   and if so, if they matched or not.
-%% - `child_at': Special case of `at' used when comparing child nodes of two
+%%   and if so, if they matched or not.</li>
+%%
+%% <li> `child_at': Special case of `at' used when comparing child nodes of two
 %%   inner nodes. Basically the same as `at', but with one new rule:
 %%
 %%     Whenever we hit a path that is `<<N>>' and we are on an inner node,
 %%     it means we only have a child to look at. Return that child along
 %%     with its byte at the offset in the dictionary structure
-%%     (`{ByteAtOffset, Node}').
+%%     (`{ByteAtOffset, Node}').</li>
 %%
 %%  Examples of navigation through a tree of the form:
-%%
+%%```
 %%   0 |             ___.-A-._____
 %%     |           /      |       \
 %%   1 |        .-B-.     C      .-D-.
@@ -330,9 +337,9 @@ visit_nodes(VisitFun, InitAcc, Tree0) when is_function(VisitFun, 4) ->
 %%   2 |      E       F       .G.      H
 %%     |                     /   \
 %%   3 |                    I     J
-%%
+%%'''
 %%  Which is four levels deep. The following paths lead to following nodes:
-%%
+%%```
 %%  +==============+===========+    +==============+===========+
 %%  |    Path      |    Node   |    |    Path      |    Node   |
 %%  +==============+===========+    +==============+===========+
@@ -343,14 +350,14 @@ visit_nodes(VisitFun, InitAcc, Tree0) when is_function(VisitFun, 4) ->
 %%  | <<3>>        | undefined |    | <<2,0,1>>    |     J     |
 %%  | <<0,0>>      |     E     |    | <<2,0,1,3>>  | undefined |
 %%  +--------------+-----------+    +--------------+-----------+
-%%
+%%'''
 %% The values returned are all the keys that differ across both trees.
 -spec dist_diff(tree(), access_fun()) -> [key()].
 dist_diff(Tree0, Fun) when is_function(Fun,2) ->
     {Tree, DB} = unpack_db_tree(Tree0),
     diff(Tree, DB, Fun, <<>>).
 
-%% @doc Returns an `access_fun()' for the current tree. This function
+%% @doc Returns an {@link access_fun()} for the current tree. This function
 %% can be put at the end of a connection to a remote node, and it
 %% will return serialized tree nodes.
 -spec access_serialize(tree()) -> serial_fun().
