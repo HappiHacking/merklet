@@ -91,7 +91,7 @@ prop_traversal_ets_db() ->
     prop_traversal(ets_db).
 
 prop_traversal(Backend) ->
-    Fun = fun(Type, Hash,_Node, Count) ->
+    Fun = fun(Type,_Hash,_Node, Count) ->
                   orddict:update_counter(Type, 1, Count)
           end,
     ?FORALL(Entries, keyvals(),

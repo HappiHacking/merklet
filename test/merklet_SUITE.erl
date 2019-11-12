@@ -42,7 +42,7 @@ regression_visit_nodes_ets_db(_) ->
 regression_visit_nodes_common(T0) ->
     AllVals = [{<<1>>,<<1>>},{<<2>>,<<2>>},{<<3>>,<<3>>}],
     T1 = insert_all(AllVals, T0),
-    Fun = fun(Type, Hash,_Node, Count) ->
+    Fun = fun(Type,_Hash,_Node, Count) ->
                   orddict:update_counter(Type, 1, Count)
           end,
     Count = merklet:visit_nodes(Fun, [], T1),
