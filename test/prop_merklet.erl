@@ -10,7 +10,8 @@ eunit_no_db_test_() ->
     [?run(prop_diff_no_db()),
      ?run(prop_dist_diff_no_db()),
      ?run(prop_delete_no_db()),
-     ?run(prop_modify_no_db())].
+     ?run(prop_modify_no_db())
+    ].
 
 eunit_dict_db_test_() ->
     [?run(prop_diff_dict_db()),
@@ -24,6 +25,10 @@ eunit_ets_db_test_() ->
      ?run(prop_dist_diff_ets_db()),
      ?run(prop_delete_ets_db()),
      ?run(prop_modify_ets_db())
+    ].
+
+eunit_gc_test_() ->
+    [?run(prop_gc())
     ].
 
 %%%%%%%%%%%%%%%%%%
@@ -134,6 +139,46 @@ prop_modify(Backend) ->
                 andalso
                 lists:sort(ToChange) =:= merklet:diff(Modified, Tree)
             end).
+
+%% Test insertion and garbage collection of db-backed tree. Note that
+%% the nodes of a non-db-backed tree are subtrees rather than nodes,
+%% which makes the abstraction break down.
+prop_gc() ->
+    Fun = fun(_Type, Hash, Node, AccHandle) ->
+                  orddict:store(Hash, Node, AccHandle)
+          end,
+    Spec = #{ get => fun orddict:fetch/2
+            , put => fun orddict:store/3
+            , handle => []},
+    ?FORALL(Entries, keyvals(),
+            begin
+                Tree1 = extend(Entries, merklet:empty_db_tree(Spec)),
+                NewStore1 = merklet:visit_nodes(Fun, [], Tree1),
+                Tree2 = merklet:db_tree(merklet:root_hash(Tree1),
+                                        Spec#{handle => NewStore1}),
+                NewStore2 = merklet:visit_nodes(Fun, [], Tree2),
+                %% Test that we can traverse the new tree.
+                Tree3 = merklet:db_tree(merklet:root_hash(Tree2),
+                                        Spec#{handle => NewStore2}),
+                DB1 = merklet:db_handle(Tree1),
+                DB2 = merklet:db_handle(Tree2),
+                DB3 = merklet:db_handle(Tree3),
+                merklet:keys(Tree1) =:= merklet:keys(Tree2)
+                    andalso merklet:diff(Tree1, Tree2) =:= []
+                    andalso merklet:root_hash(Tree1) =:= merklet:root_hash(Tree1)
+                    andalso length(DB2) =< length(DB1)
+                    andalso is_sub_orddict(DB2, DB1)
+                    andalso DB2 =:= DB3 %% The gc should be idempotent
+            end).
+
+is_sub_orddict([], _) ->
+    true;
+is_sub_orddict(_, []) ->
+    false;
+is_sub_orddict([{K1, V1}|Left1], [{K1, V2}|Left2]) ->
+    V1 =:= V2 andalso is_sub_orddict(Left1, Left2);
+is_sub_orddict([{K1, _}|_] = Orddict1, [{K2, _}|Left2]) ->
+    K1 > K2 andalso is_sub_orddict(Orddict1, Left2).
 
 %%%%%%%%%%%%%%%%
 %%% Builders %%%

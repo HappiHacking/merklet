@@ -68,19 +68,23 @@
 %%% from the database (using the root hash), but at the same time it
 %%% leads to a waste of space if only the newest tree is ever used.
 %%%
-%%% TODO: Implement a moving garbage collector for old trees.
-%%% TODO: Implement an API function to retrieve historical trees.
+%%% The function visit_nodes/3 can be used to implement a garbage
+%%% collection. An example of this is available in the proper tests.
+%%%
+%%% Accessing a historical tree can be done by creating a tree with
+%%% the appropriate root hash and db backend using the function
+%%% db_tree/3.
 %%%
 %%% @end
 -module(merklet).
 
--record(leaf, {hash :: binary(),      % hash(hash(key), hash(value))
+-record(leaf, {hash :: hash(),        % hash(hash(key), hash(value))
                userkey :: binary(),   % user submitted key
                hashkey :: binary()}). % hash of the user submitted key
--record(inner, {hashchildren :: binary(), % hash of children's hashes
+-record(inner, {hashchildren :: hash(), % hash of children's hashes
                 %% The children is really nonempty but, we abuse it in
                 %% unserialize, which Dialyzer finds.
-                children :: [{offset(), #inner{} | #leaf{} | binary()}],
+                children :: [{offset(), #inner{} | #leaf{} | hash()}],
                 offset :: non_neg_integer()}). % byte offset
 
 -record(db, { get    :: get_fun()
@@ -89,7 +93,7 @@
             }).
 
 -record(dbtree, { db   :: db()
-                , hash :: 'undefined' | binary()
+                , hash :: 'undefined' | hash()
                 }).
 
 -define(HASHPOS, 2). % #leaf.hash =:= #inner.hashchildren
@@ -105,19 +109,21 @@
 -type key() :: binary().
 -type value() :: binary().
 -type path() :: binary().
--type access_fun() :: fun((at | child_at | keys | {keys, Hash::binary()}, path()) -> non_db_tree()).
--type serial_fun() :: fun((at | child_at | keys | {keys, Hash::binary()}, path()) -> binary()).
+-type hash() :: binary().
+-type access_fun() :: fun((at | child_at | keys | {keys, Hash::hash()}, path()) -> non_db_tree()).
+-type serial_fun() :: fun((at | child_at | keys | {keys, Hash::hash()}, path()) -> binary()).
 
 -type db() :: #db{}.
 -type db_handle() :: term().
--type get_fun() :: fun((Key :: binary(), db_handle()) -> non_db_tree()).
--type put_fun() :: fun((Key :: binary(), Node :: leaf() | inner(), db_handle()) -> db_handle()).
+-type get_fun() :: fun((hash(), db_handle()) -> non_db_tree()).
+-type put_fun() :: fun((hash(), Node :: leaf() | inner(), db_handle()) -> db_handle()).
 
 -export_type([tree/0, key/0, value/0, path/0, access_fun/0, serial_fun/0]).
 -export_type([get_fun/0, put_fun/0, db_handle/0]).
 -export([insert/2, insert_many/2, delete/2, keys/1, diff/2]).
 -export([dist_diff/2, access_serialize/1, access_unserialize/1]).
--export([empty_db_tree/0, empty_db_tree/1, expand_db_tree/1]).
+-export([empty_db_tree/0, empty_db_tree/1, db_tree/2, db_handle/1, root_hash/1]).
+-export([visit_nodes/3]).
 
 -ifdef(TEST).
 %% Test interface
@@ -143,6 +149,7 @@
 %%% API %%%
 %%%%%%%%%%%
 
+%% @doc Creating an empty tree with the built-in dict backend
 -spec empty_db_tree() -> db_tree().
 empty_db_tree() ->
     empty_db_tree(#{ get    => fun dict:fetch/2
@@ -150,6 +157,7 @@ empty_db_tree() ->
                    , handle => dict:new()
                    }).
 
+%% @doc Creating an empty tree with user-defined db backend
 -spec empty_db_tree(#{ get    := get_fun()
                      , put    := put_fun()
                      , handle := db_handle()}) -> db_tree().
@@ -163,6 +171,31 @@ empty_db_tree(#{ get := GetFun
                        , handle=Handle
                        }}.
 
+%% @doc Get the root hash for the tree. If the tree is empty, the root
+%% hash is 'undefined'.
+-spec root_hash(tree()) -> hash() | 'undefined'.
+root_hash(Tree0) ->
+    case unpack_db_tree(Tree0) of
+        {undefined, _} -> undefined;
+        {#inner{hashchildren=Hash}, _} -> Hash;
+        {#leaf{hash=Hash}, _} -> Hash
+    end.
+
+%% @doc Get the db_handle() of a db_tree().
+-spec db_handle(db_tree()) -> db_handle().
+db_handle(#dbtree{db = #db{handle=Handle}}) ->
+    Handle.
+
+%% @doc Creating an tree with user-defined db backend and setting the
+%%      root hash. Useful to re-initialize a tree from minimal
+%%      information and a prebuilt db store.
+-spec db_tree(hash(), #{ get    := get_fun()
+                       , put    := put_fun()
+                       , handle := db_handle()}) -> db_tree().
+db_tree(RootHash, Spec) when RootHash =:= undefined;
+                             byte_size(RootHash) =:= ?HASHBYTES ->
+    T0 = empty_db_tree(Spec),
+    T0#dbtree{ hash = RootHash }.
 
 -ifdef(TEST).
 %% Test interface to facilitate comparing trees
@@ -230,6 +263,30 @@ diff(Tree10, Tree20) ->
     {Tree2, DB2} = unpack_db_tree(Tree20),
     Fun = access_local(Tree2, DB2),
     diff(Tree1, DB1, Fun, <<>>).
+
+%% @doc Traversal of the tree nodes. Can be useful for implementing a
+%% moving garbage collector of the db backend, Or a staged commit
+%% scheme of the db where only the reachable nodes of a cache is
+%% committed to the real backend.
+%%
+%% The nodes are visited in pre-order, parents are visited before
+%% children.
+%%
+%% The visit fun should either return the atom 'stop' or a new
+%% accumulator. The 'stop` is interpreted as to not traverse the
+%% subtree rooted at the node. Siblings are still traversed.
+
+-type node_type() :: 'leaf' | 'inner'.
+-type visit_fun() :: fun((node_type(), hash(), leaf() | inner(), Acc :: term()) ->
+                                'stop' | term()).
+-spec visit_nodes(visit_fun(), InitAcc :: term(), tree()) -> ResultAcc :: term().
+visit_nodes(VisitFun, InitAcc, Tree0) when is_function(VisitFun, 4) ->
+    case unpack_db_tree(Tree0) of
+        {undefined, _} ->
+            InitAcc;
+        {Tree, DB} ->
+            visit(Tree, VisitFun, DB, InitAcc)
+    end.
 
 %% @doc Takes a local tree, and an access function to another tree,
 %% and returns the keys associated with diverging parts of both trees.
@@ -546,7 +603,7 @@ to_inner(Offset, Child=#leaf{hashkey=Hash}, DB) ->
 %% of inner nodes, because it is dictated by the children's keyhashes, and
 %% not the inner node's own hashes.
 %% @todo consider endianness for absolute portability
--spec children_hash([{offset(), leaf()}, ...]) -> binary().
+-spec children_hash([{offset(), leaf()}, ...]) -> hash().
 children_hash([{_, B}|_] = Children) when is_binary(B) ->
     %% This is in db mode
     Hashes = [ChildHash || {_Offset, ChildHash} <- Children],
@@ -688,6 +745,23 @@ unserialize(<<?VSN, ?KEYS_SKIP, Seen:2, NumKeys:16, Serialized/binary>>) ->
     NumKeys = length(Keys),
     {Word, Keys}.
 
+%% Node traversal
+visit(#leaf{hash = Hash} = Node, VisitFun,_DB, Acc) ->
+    case VisitFun(leaf, Hash, Node, Acc) of
+        stop -> Acc;
+        NewAcc -> NewAcc
+    end;
+visit(#inner{hashchildren = Hash} = Node, VisitFun, DB, Acc) ->
+    case VisitFun(inner, Hash, Node, Acc) of
+        stop ->
+            Acc;
+        NewAcc ->
+            orddict:fold(fun(_, ChildRef, FoldAcc) ->
+                                 visit(db_get(ChildRef, DB), VisitFun, DB, FoldAcc)
+                         end, NewAcc, Node#inner.children)
+    end.
+
+%% Interface to the db backend's callback functions.
 db_put(_, no_db) ->
     no_db;
 db_put(#leaf{hash = Hash} = Node, #db{put=Put, handle=Handle} = DB) ->

@@ -10,6 +10,7 @@
 
 eunit_no_db_test_() ->
     [?run(prop_insert_many_no_db()),
+     ?run(prop_traversal_no_db()),
      ?run(prop_delete_random_no_db()),
      ?run(prop_delete_members_no_db()),
      ?run(prop_overwrite_no_db()),
@@ -25,6 +26,7 @@ eunit_no_db_test_() ->
 
 eunit_dict_db_test_() ->
     [?run(prop_insert_many_dict_db()),
+     ?run(prop_traversal_dict_db()),
      ?run(prop_delete_random_dict_db()),
      ?run(prop_delete_members_dict_db()),
      ?run(prop_overwrite_dict_db()),
@@ -40,6 +42,7 @@ eunit_dict_db_test_() ->
 
 eunit_ets_db_test_() ->
     [?run(prop_insert_many_ets_db()),
+     ?run(prop_traversal_ets_db()),
      ?run(prop_delete_random_ets_db()),
      ?run(prop_delete_members_ets_db()),
      ?run(prop_overwrite_ets_db()),
@@ -76,6 +79,30 @@ prop_insert_many(Backend) ->
             =:=
             merklet:keys(merklet:insert_many(Entries,empty_tree(Backend)))
            ).
+
+%% Test insertion and traversing all nodes.
+prop_traversal_no_db() ->
+    prop_traversal(no_db).
+
+prop_traversal_dict_db() ->
+    prop_traversal(dict_db).
+
+prop_traversal_ets_db() ->
+    prop_traversal(ets_db).
+
+prop_traversal(Backend) ->
+    Fun = fun(Type, Hash,_Node, Count) ->
+                  orddict:update_counter(Type, 1, Count)
+          end,
+    ?FORALL(Entries, keyvals(),
+            begin
+                M = merklet_model:insert_many(Entries,undefined),
+                T = merklet:insert_many(Entries,empty_tree(Backend)),
+                InitAcc = orddict:from_list([{leaf, 0}, {inner, 0}]),
+                length(merklet_model:keys(M))
+                    =:=
+                    orddict:fetch(leaf, merklet:visit_nodes(Fun, InitAcc, T))
+            end).
 
 %% Delete keys that may or may not be in the tree
 prop_delete_random_no_db() ->
